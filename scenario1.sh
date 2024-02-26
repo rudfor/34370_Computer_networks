@@ -9,7 +9,6 @@ create_namespace() {
   sudo ip netns exec $namespace ping -c1 127.0.0.1
 }
 
-
 sudo ip -all netns delete
 
 # Create and configure nsH1
@@ -25,7 +24,6 @@ sudo ip netns exec nsH1 ip addr add 192.168.100.1/24 dev veth1
 sudo ip netns exec nsH1 ip link set dev veth1 up
 sudo ip netns exec nsH2 ip addr add 192.168.100.2/24 dev veth2
 sudo ip netns exec nsH2 ip link set dev veth2 up
-
 
 # ip netns
 # # Add namespace H1
