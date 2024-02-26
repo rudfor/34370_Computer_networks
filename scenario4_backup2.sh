@@ -33,7 +33,7 @@ sudo ip netns exec nsS1 ip link set dev veth1 up
 sudo ip netns exec nsS1 ip link set dev veth2 up
 sudo ip netns exec nsS1 ip link set dev veth7 up
 sudo ip netns exec nsS1 ip link set dev veth8 up
-sudo ip netns exec nsS1 ip link set S1 up
+sudo ip netns exec nsS1 ip link set dev S1 up
 
 sudo ip netns exec nsH1 ip addr add 192.168.100.1/24 dev veth3
 sudo ip netns exec nsH1 ip link set dev veth3 up
@@ -75,51 +75,19 @@ sudo ip netns exec nsS1 bridge vlan del vid 1 dev veth1
 sudo ip netns exec nsS1 bridge vlan del vid 1 dev veth2
 sudo ip netns exec nsS1 bridge vlan del vid 1 dev veth7
 sudo ip netns exec nsS1 bridge vlan del vid 1 dev veth8
-echo "phase 1"
+
 sudo ip netns exec nsS1 bridge vlan add vid 77 pvid untagged dev veth1
 sudo ip netns exec nsS1 bridge vlan add vid 77 pvid untagged dev veth2
 sudo ip netns exec nsS1 bridge vlan add vid 88 pvid untagged dev veth7
 sudo ip netns exec nsS1 bridge vlan add vid 88 pvid untagged dev veth8
-echo "phase 2"
-sudo ip netns exec nsS1 ip link add link veth5 name veth5.77 type vlan id 77
-sudo ip netns exec nsS1 ip link add link veth5 name veth5.88 type vlan id 88
-echo "phase 3"
-sudo ip netns exec nsS1 bridge vlan del vid 1 dev veth5.77
-sudo ip netns exec nsS1 bridge vlan del vid 1 dev veth5.88
-echo "phase 4"
-sudo ip netns exec nsS1 bridge vlan add vid 77 pvid untagged dev veth5.77
-sudo ip netns exec nsS1 bridge vlan add vid 88 pvid untagged dev veth5.88
 
-sudo ip netns exec nsS1 ip link set dev veth5.77 up
-sudo ip netns exec nsS1 ip link set dev veth5.88 up
-
-echo "not now4"
 # Activate and assign veth5 to the switch
 sudo ip netns exec nsS1 ip link set dev veth5 master S1
-sudo ip netns exec nsS1 ip link set dev veth5.77 master S1
-sudo ip netns exec nsS1 ip link set dev veth5.88 master S1
 sudo ip netns exec nsS1 ip link set dev veth5 up
-
-sudo ip link add link veth6 name veth6.77 type vlan id 77
-sudo ip link add link veth6 name veth6.88 type vlan id 88
-sudo ip link set dev veth6.77 up
-sudo ip link set dev veth6.88 up
 
 # Assign IP address and activate veth6
 sudo ip addr add 192.168.100.3/24 dev veth6
 sudo ip link set dev veth6 up
 
-sudo iptables -A FORWARD -i veth5.77 -o veth5 -j ACCEPT
-sudo iptables -A FORWARD -i veth5 -o veth5.77 -j ACCEPT
-
-sudo iptables -A FORWARD -i veth6.77 -o veth6 -j ACCEPT
-sudo iptables -A FORWARD -i veth6 -o veth6.77 -j ACCEPT
-sudo iptables -A FORWARD -i veth6.88 -o veth6 -j ACCEPT
-sudo iptables -A FORWARD -i veth6 -o veth6.88 -j ACCEPT
-sudo iptables -A FORWARD -i enp0s3 -o veth6 -j ACCEPT
-sudo iptables -A FORWARD -i veth6 -o enp0s3 -j ACCEPT
-
-
-# sudo ip netns exec nsH1 ping -c1 127.0.0.1
 # List NetworkNamespaces
 ip netns list
