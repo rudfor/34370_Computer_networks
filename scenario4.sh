@@ -77,6 +77,19 @@ sudo ip netns exec nsH2 ip route add default via 192.168.100.3
 sudo ip netns exec nsH3 ip route add default via 192.168.100.3
 sudo ip netns exec nsH4 ip route add default via 192.168.100.3
 
+sudo ip netns exec nsS1 ip link set S1 type bridge vlan_filtering 1
+
+sudo ip netns exec nsS1 bridge vlan del vid 1 dev veth1
+sudo ip netns exec nsS1 bridge vlan del vid 1 dev veth2
+sudo ip netns exec nsS1 bridge vlan del vid 1 dev veth7
+sudo ip netns exec nsS1 bridge vlan del vid 1 dev veth8
+
+sudo ip netns exec nsS1 bridge vlan add vid 77 pvid untagged dev veth1
+sudo ip netns exec nsS1 bridge vlan add vid 77 pvid untagged dev veth2
+sudo ip netns exec nsS1 bridge vlan add vid 88 pvid untagged dev veth7
+sudo ip netns exec nsS1 bridge vlan add vid 88 pvid untagged dev veth8
+
+
 # sudo ip netns exec nsH1 ping -c1 127.0.0.1
 # List NetworkNamespaces
 ip netns list
