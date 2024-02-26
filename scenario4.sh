@@ -130,20 +130,27 @@ sudo ip netns exec nsS1 bridge vlan add vid 77 pvid untagged dev veth2
 print_message "Phase $counter" 1; increment_counter
 sudo ip netns exec nsS1 bridge vlan add vid 88 pvid untagged dev veth7
 sudo ip netns exec nsS1 bridge vlan add vid 88 pvid untagged dev veth8
-print_message "Segregation $counter" 0; increment_counter
-sudo ip netns exec nsS1 ip link add link veth5 name veth5.77 type vlan id 77
-sudo ip netns exec nsS1 ip link add link veth5 name veth5.88 type vlan id 88
 
-print_message "Phase $counter" 1; increment_counter
+
+print_message "NameSpace $counter" 1; increment_counter
+# Check if the namespace exists
+if sudo ip netns list | grep -q "nsS1"; then
+    print_message "Segregation $counter" 0; increment_counter
+    sudo ip netns exec nsS1 ip link add link veth5 name veth5.77 type vlan id 77 2> NSerror.log
+    sudo ip netns exec nsS1 ip link add link veth5 name veth5.88 type vlan id 88 2>> NSerror.log
+    sudo ip netns exec nsS1 bridge vlan del vid 1 dev 'veth5.77' 2>> NSerror.log
+    sudo ip netns exec nsS1 bridge vlan del vid 1 dev 'veth5.88' 2>> NSerror.log
+    sudo ip netns exec nsS1 bridge vlan add vid 77 pvid untagged dev veth5.77 2>> NSerror.log
+    sudo ip netns exec nsS1 bridge vlan add vid 88 pvid untagged dev veth5.88 2>> NSerror.log
+else
+    echo "Namespace nsS1 does not exist."
+fi
+
+
+print_message "5.XX up $counter" 1; increment_counter
 sudo ip netns exec nsS1 ip link set dev veth5.77 up
 sudo ip netns exec nsS1 ip link set dev veth5.88 up
 
-print_message "Phase $counter" 1; increment_counter
-sudo ip netns exec nsS1 bridge vlan del vid 1 dev 'veth5.77'
-sudo ip netns exec nsS1 bridge vlan del vid 1 dev 'veth5.88'
-
-sudo ip netns exec nsS1 bridge vlan add vid 77 pvid untagged dev veth5.77
-sudo ip netns exec nsS1 bridge vlan add vid 88 pvid untagged dev veth5.88
 
 print_message "Phase $counter" 1; increment_counter
 # Remove the incorrect VLAN configuration for veth5.77 and veth5.88
