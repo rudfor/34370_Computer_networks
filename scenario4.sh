@@ -4,101 +4,120 @@
 verbosity=0
 # Counter variable
 counter=0
-# Function to print messages based on verbosity level
-print_message() {
-    local message="$1"
-    local level="$2"
-
-    # Check if verbosity is greater than or equal to the specified level
-    if [ "$verbosity" -ge "$level" ]; then
-        echo "$message"
-    fi
-}
-
-# Parse command-line arguments for verbosity
-while getopts ":v" opt; do
-    case $opt in
-        v)
-            verbosity=$((verbosity + 1))
-            ;;
-        \?)
-            echo "Invalid option: -$OPTARG" >&2
-            exit 1
-            ;;
-    esac
-done
 
 # Function to increment the counter
 increment_counter() {
     counter=$((counter + 1))
 }
+# Function to print messages based on verbosity level
+print_message() {
+    local message="$1"
+    local level="$2"
+    local run_increment="${3:-true}"  # Use true as default if the third argument is not provided
+
+    # Check if verbosity is greater than or equal to the specified level
+    if [ "$verbosity" -ge "$level" ]; then
+        echo "$message"
+        # Check if the third argument is set to true, then run the function
+        if [ "$run_increment" = true ]; then
+            # Replace the following line with the actual function you want to run
+            increment_counter
+        fi
+    fi
+
+
+}
+
+# Parse command-line arguments for verbosity
+while getopts ":v" opt; do
+    case $opt in
+        v)  verbosity=$((verbosity + 1))
+            ;;
+        \?) echo "Invalid option: -$OPTARG" >&2
+            exit 1
+            ;;
+    esac
+done
 
 # Example messages at different verbosity levels
-print_message "This is a low verbosity message" 1
-print_message "This is a medium verbosity message" 2
-print_message "This is a high verbosity message" 3
-
+print_message "This is a low verbosity message" 1 false
+print_message "This is a medium verbosity message" 2 false
+print_message "This is a high verbosity message" 3 false
 
 # Function to create and configure namespaces
 create_namespace() {
   local namespace=$1
+  local run_verbose="${2:-false}"  # Use true as default if the third argument is not provided
+
   sudo ip netns add $namespace
   sudo ip netns exec $namespace ip link set dev lo up
-  sudo ip netns exec $namespace ip addr
-  sudo ip netns exec $namespace ping -c1 127.0.0.1
+  if [ "$run_verbose" = true ]; then
+    sudo ip netns exec $namespace ip addr
+    sudo ip netns exec $namespace ping -c1 127.0.0.1
+  fi
 }
+
+# Function to create and configure veth pairs
+create_veth_pairs() {
+    local namespace="$1"
+    local veth1="$2"
+    local veth2="$3"
+ 
+    sudo ip netns exec nsS1 ip link add "$veth1" type veth peer name "$veth2"
+    sudo ip netns exec nsS1 ip link set "$veth2" netns "$namespace"
+    sudo ip netns exec nsS1 ip link set dev "$veth1" up
+}
+
+# Function to configure IP addresses and bring up veth pairs
+configure_ip_and_up() {
+    local namespace="$1"
+    local veth="$2"
+    local ip_address="$3"
+
+    sudo ip netns exec "$namespace" ip addr add "$ip_address" dev "$veth"
+    sudo ip netns exec "$namespace" ip link set dev "$veth" up
+}
+
 sudo ip -all netns delete
 
-# Create and configure nsH2
-create_namespace "nsH4"
-create_namespace "nsH3"
-create_namespace "nsH2"
-create_namespace "nsH1"
-create_namespace "nsS1"
-print_message "Phase $counter" 1; increment_counter
+# Create and configure namespaces using a foreach loop
+namespaces=("nsH4" "nsH3" "nsH2" "nsH1" "nsS1")
+for ns in "${namespaces[@]}"; do
+    create_namespace "$ns"
+done
+print_message "NameSpaces Created @$counter" 1
 
-sudo ip netns exec nsS1 ip link add veth1 type veth peer name veth3
-sudo ip netns exec nsS1 ip link set veth3 netns nsH1
-sudo ip netns exec nsS1 ip link add veth2 type veth peer name veth4
-sudo ip netns exec nsS1 ip link set veth4 netns nsH2
-sudo ip netns exec nsS1 ip link add veth7 type veth peer name veth9
-sudo ip netns exec nsS1 ip link set veth9 netns nsH3
-sudo ip netns exec nsS1 ip link add veth8 type veth peer name veth10
-sudo ip netns exec nsS1 ip link set veth10 netns nsH4
+create_veth_pairs nsH1 veth1 veth3
+create_veth_pairs nsH2 veth2 veth4
+create_veth_pairs nsH3 veth7 veth9
+create_veth_pairs nsH4 veth8 veth10
+
+print_message "Veth Pairs Created @$counter" 1
 
 sudo ip netns exec nsS1 ip link add name S1 type bridge
-print_message "Phase $counter" 1; increment_counter
-
-sudo ip netns exec nsS1 ip link set dev veth1 up
-sudo ip netns exec nsS1 ip link set dev veth2 up
-sudo ip netns exec nsS1 ip link set dev veth7 up
-sudo ip netns exec nsS1 ip link set dev veth8 up
 sudo ip netns exec nsS1 ip link set S1 up
-print_message "Phase $counter" 1; increment_counter
+print_message "Create S1 Brige $counter" 1
 
-sudo ip netns exec nsH1 ip addr add 192.168.100.1/24 dev veth3
-sudo ip netns exec nsH1 ip link set dev veth3 up
-sudo ip netns exec nsH2 ip addr add 192.168.100.2/24 dev veth4
-sudo ip netns exec nsH2 ip link set dev veth4 up
-sudo ip netns exec nsH3 ip addr add 192.168.100.3/24 dev veth9
-sudo ip netns exec nsH3 ip link set dev veth9 up
-sudo ip netns exec nsH4 ip addr add 192.168.100.4/24 dev veth10
-sudo ip netns exec nsH4 ip link set dev veth10 up
-print_message "Phase $counter" 1; increment_counter
+configure_ip_and_up "nsH1" "veth3" "192.168.100.1/24"
+configure_ip_and_up "nsH2" "veth4" "192.168.100.2/24"
+configure_ip_and_up "nsH3" "veth9" "192.168.100.3/24"
+configure_ip_and_up "nsH4" "veth10" "192.168.100.4/24"
+
+print_message "Configure nsHX ip $counter" 1
 
 sudo ip netns exec nsS1 ip link set dev veth1 master S1
 sudo ip netns exec nsS1 ip link set dev veth2 master S1
 sudo ip netns exec nsS1 ip link set dev veth7 master S1
 sudo ip netns exec nsS1 ip link set dev veth8 master S1
-print_message "Phase $counter" 1; increment_counter
+print_message "Phase $counter" 1
 # Create new veth link in the default namespace and reassign one endpoint to S1 namespace
 sudo ip link add veth6 type veth peer name veth5
 sudo ip link set veth5 netns nsS1
 #sudo ip netns exec nsS1 ip link set dev veth5 up
-print_message "Phase $counter" 1; increment_counter
+print_message "Phase $counter" 1
 
 sudo sysctl net.ipv4.ip_forward=1
-print_message "Phase $counter" 1; increment_counter
+print_message "Phase $counter" 1
 
 sudo iptables -P FORWARD DROP
 sudo iptables -F FORWARD
@@ -109,7 +128,7 @@ sudo iptables -t nat -A POSTROUTING -s 192.168.100.0/24 -o enp0s3 -j MASQUERADE
 sudo iptables -A FORWARD -i enp0s3 -o veth6 -j ACCEPT
 sudo iptables -A FORWARD -i veth6 -o enp0s3 -j ACCEPT
 
-print_message "Phase $counter" 1; increment_counter
+print_message "Phase $counter" 1
 
 print_message "Routing $counter" 0; increment_counter
 sudo ip netns exec nsH1 ip route add default via 192.168.100.8
@@ -194,16 +213,18 @@ sudo ip link set dev veth6.88 up
 # Assign IP address and activate veth6
 sudo ip addr add 192.168.100.8/24 dev veth6.77
 sudo ip addr add 192.168.100.9/24 dev veth6.88
-sudo ip addr add 192.168.100.3/24 dev veth6
+sudo ip addr add 192.168.100.10/24 dev veth6
 sudo ip link set dev veth6 up
 
 sudo iptables -A FORWARD -i veth5.77 -o veth5 -j ACCEPT
 sudo iptables -A FORWARD -i veth5 -o veth5.77 -j ACCEPT
+sudo iptables -A FORWARD -i veth5.88 -o veth5 -j ACCEPT
+sudo iptables -A FORWARD -i veth5 -o veth5.88 -j ACCEPT
 
-sudo iptables -A FORWARD -i veth6.77 -o veth6 -j ACCEPT
-sudo iptables -A FORWARD -i veth6 -o veth6.77 -j ACCEPT
-sudo iptables -A FORWARD -i veth6.88 -o veth6 -j ACCEPT
-sudo iptables -A FORWARD -i veth6 -o veth6.88 -j ACCEPT
+sudo iptables -A FORWARD -i veth6.77 -o enp0s3 -j ACCEPT
+sudo iptables -A FORWARD -i enp0s3 -o veth6.77 -j ACCEPT
+sudo iptables -A FORWARD -i veth6.88 -o enp0s3 -j ACCEPT
+sudo iptables -A FORWARD -i enp0s3 -o veth6.88 -j ACCEPT
 sudo iptables -A FORWARD -i enp0s3 -o veth6 -j ACCEPT
 sudo iptables -A FORWARD -i veth6 -o enp0s3 -j ACCEPT
 
