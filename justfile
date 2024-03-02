@@ -44,8 +44,10 @@ iptls networkNameSpace='nsS1':
     sudo ip netns exec {{networkNameSpace}} iptables --list
 
 ping_outside networkNameSpace='nsS1':
-    sudo ip netns exec {{networkNameSpace}} ping 8.8.8.8
+    sudo ip netns exec {{networkNameSpace}} ping -c1 8.8.8.8
 
-ping_i networkNameSpace='nsS1' target_ip='10.168.100.1':
-    sudo ip netns exec {{networkNameSpace}} ping -W1 {{target_ip}}
+ping_i networkNameSpace='nsS1' target_ip='192.168.100.1':
+    sudo ip netns exec {{networkNameSpace}} ping -c1 -W1 {{target_ip}}
 
+check:
+    ping_i nsH1 192.168.100.1

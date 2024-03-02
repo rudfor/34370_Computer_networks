@@ -150,10 +150,12 @@ configure_routing_namespace_ip nsH4 192.168.100.188
 
 print_message "Allocated Ip routes outside $counter" 0
 
-sudo ip route add 192.168.100.1 via 192.168.100.177
-sudo ip route add 192.168.100.2 via 192.168.100.177
-sudo ip route add 192.168.100.3 via 192.168.100.188
-sudo ip route add 192.168.100.4 via 192.168.100.188
+# sudo ip netns exec nsH1 ip route add default via 192.168.100.177
+
+sudo ip route add 192.168.100.1 via 192.168.100.177 dev veth6.77
+sudo ip route add 192.168.100.2 via 192.168.100.177 dev veth6.77
+sudo ip route add 192.168.100.3 via 192.168.100.188 dev veth6.88
+sudo ip route add 192.168.100.4 via 192.168.100.188 dev veth6.88
 
 print_message "VLAN 5, 6 Setup $counter" 0
 
@@ -201,10 +203,10 @@ sudo iptables -A FORWARD -i veth6 -o enp0s3 -j ACCEPT
 print_message "Phase $counter" 1
 
 print_message "Routing $counter" 0; increment_counter
-sudo ip netns exec nsH1 ip route add default via 192.168.100.8
-sudo ip netns exec nsH2 ip route add default via 192.168.100.8
-sudo ip netns exec nsH3 ip route add default via 192.168.100.9
-sudo ip netns exec nsH4 ip route add default via 192.168.100.9
+sudo ip netns exec nsH1 ip route add default via 192.168.100.177
+sudo ip netns exec nsH2 ip route add default via 192.168.100.177
+sudo ip netns exec nsH3 ip route add default via 192.168.100.188
+sudo ip netns exec nsH4 ip route add default via 192.168.100.188
 
 sudo ip netns exec nsS1 ip link set S1 type bridge vlan_filtering 1
 print_message "Phase $counter" 1; increment_counter
