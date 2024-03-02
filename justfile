@@ -37,6 +37,12 @@ bvs networkNameSpace='nsS1':
 ipr networkNameSpace='nsS1':
     sudo ip netns exec {{networkNameSpace}} ip route
 
+ipls networkNameSpace='nsS1':
+    sudo ip netns exec {{networkNameSpace}} ip link show
+
+iptls networkNameSpace='nsS1':
+    sudo ip netns exec {{networkNameSpace}} iptables --list
+
 ping_outside networkNameSpace='nsS1':
     sudo ip netns exec {{networkNameSpace}} ping 8.8.8.8
 
