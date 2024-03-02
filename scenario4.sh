@@ -1,48 +1,7 @@
 #!/usr/bin/env bash
 
-# Set default verbosity level
-verbosity=0
-# Counter variable
-counter=0
-
-# Function to increment the counter
-increment_counter() {
-    counter=$((counter + 1))
-}
-# Function to print messages based on verbosity level
-print_message() {
-    local message="$1"
-    local level="$2"
-    local run_increment="${3:-true}"  # Use true as default if the third argument is not provided
-
-    # Check if verbosity is greater than or equal to the specified level
-    if [ "$verbosity" -ge "$level" ]; then
-        echo "$message"
-        # Check if the third argument is set to true, then run the function
-        if [ "$run_increment" = true ]; then
-            # Replace the following line with the actual function you want to run
-            increment_counter
-        fi
-    fi
-
-
-}
-
-# Parse command-line arguments for verbosity
-while getopts ":v" opt; do
-    case $opt in
-        v)  verbosity=$((verbosity + 1))
-            ;;
-        \?) echo "Invalid option: -$OPTARG" >&2
-            exit 1
-            ;;
-    esac
-done
-
-# Example messages at different verbosity levels
-print_message "This is a low verbosity message" 1 false
-print_message "This is a medium verbosity message" 2 false
-print_message "This is a high verbosity message" 3 false
+# Source Common Functions
+source common_functions.sh
 
 # Function to create and configure namespaces
 create_namespace() {
@@ -78,6 +37,29 @@ configure_ip_and_up() {
     sudo ip netns exec "$namespace" ip link set dev "$veth" up
 }
 
+# Delete default rouging and replace
+configure_routing_namespace_ip() {
+    local namespace="$1"
+    local ip_address="$2"
+    local run_verbose="${3:-false}"  # Use true as default if the third argument is not provided
+
+    # Check if a default route exists in nsH1 namespace
+    if sudo ip netns exec "$namespace" ip route | grep -q default; then
+        sudo ip netns exec "$namespace" ip route del default
+        if [ "$run_verbose" = true ]; then
+            echo "Default route deleted in "$namespace" namespace."
+        fi
+    else
+        if [ "$run_verbose" = true ]; then
+            echo "No default route found in "$namespace" namespace."
+        fi
+    fi
+    if [ "$run_verbose" = true ]; then
+        echo "sudo ip netns exec $namespace ip route add default via $ip_address"
+    fi
+    sudo ip netns exec "$namespace" ip route add default via "$ip_address"
+}
+
 sudo ip -all netns delete
 
 # Create and configure namespaces using a foreach loop
@@ -103,17 +85,105 @@ configure_ip_and_up "nsH2" "veth4" "192.168.100.2/24"
 configure_ip_and_up "nsH3" "veth9" "192.168.100.3/24"
 configure_ip_and_up "nsH4" "veth10" "192.168.100.4/24"
 
-print_message "Configure nsHX ip $counter" 1
+print_message "Configure nsHX ip $counter" 0
 
 sudo ip netns exec nsS1 ip link set dev veth1 master S1
 sudo ip netns exec nsS1 ip link set dev veth2 master S1
 sudo ip netns exec nsS1 ip link set dev veth7 master S1
 sudo ip netns exec nsS1 ip link set dev veth8 master S1
-print_message "Phase $counter" 1
+
+print_message "Assign veth to nsS1 Switch $counter" 1
+
 # Create new veth link in the default namespace and reassign one endpoint to S1 namespace
 sudo ip link add veth6 type veth peer name veth5
 sudo ip link set veth5 netns nsS1
+
+sudo ip netns exec nsS1 ip link set S1 type bridge vlan_filtering 1
+
+sudo ip netns exec nsS1 ip link add link veth5 name veth5.77 type vlan id 77
+sudo ip netns exec nsS1 ip link add link veth5 name veth5.88 type vlan id 88
+
+print_message "Created veth5 subnet $counter" 0
+sudo ip netns exec nsS1 ip link set dev veth5.77 master S1
+sudo ip netns exec nsS1 ip link set dev veth5.88 master S1
+
+sudo ip netns exec nsS1 ip link set dev veth5 up
+sudo ip netns exec nsS1 ip link set dev veth5.77 up
+sudo ip netns exec nsS1 ip link set dev veth5.88 up
+
+sudo ip netns exec nsS1 bridge vlan del vid 1 dev veth1
+sudo ip netns exec nsS1 bridge vlan del vid 1 dev veth2
+sudo ip netns exec nsS1 bridge vlan del vid 1 dev veth7
+sudo ip netns exec nsS1 bridge vlan del vid 1 dev veth8
+sudo ip netns exec nsS1 bridge vlan del vid 1 dev veth5.77
+sudo ip netns exec nsS1 bridge vlan del vid 1 dev veth5.88
+print_message "Bridge $counter" 0; increment_counter
+
+sudo ip netns exec nsS1 bridge vlan add vid 77 pvid untagged dev veth1
+sudo ip netns exec nsS1 bridge vlan add vid 77 pvid untagged dev veth2
+sudo ip netns exec nsS1 bridge vlan add vid 77 pvid untagged dev veth5.77
+
+print_message "Phase $counter" 1; increment_counter
+sudo ip netns exec nsS1 bridge vlan add vid 88 pvid untagged dev veth7
+sudo ip netns exec nsS1 bridge vlan add vid 88 pvid untagged dev veth8
+sudo ip netns exec nsS1 bridge vlan add vid 88 pvid untagged dev veth5.88
+
+print_message "vlan5 Setup with subnet 77 and 88 $counter" 0
+
+sudo ip link set veth6 down
+sudo ip link add link veth6 name veth6.77 type vlan id 77
+sudo ip link add link veth6 name veth6.88 type vlan id 88
+
+sudo ip addr add 192.168.100.177/24 dev veth6.77
+sudo ip addr add 192.168.100.188/24 dev veth6.88
+
+sudo ip link set dev veth6 up
+sudo ip link set dev veth6.77 up
+sudo ip link set dev veth6.88 up
+
+print_message "vlan6 Setup with subnet 77 and 88 $counter" 0
+
+configure_routing_namespace_ip nsH1 192.168.100.177
+configure_routing_namespace_ip nsH2 192.168.100.177
+configure_routing_namespace_ip nsH3 192.168.100.188
+configure_routing_namespace_ip nsH4 192.168.100.188
+
+print_message "Allocated Ip routes outside $counter" 0
+
+sudo ip route add 192.168.100.1 via 192.168.100.177
+sudo ip route add 192.168.100.2 via 192.168.100.177
+sudo ip route add 192.168.100.3 via 192.168.100.188
+sudo ip route add 192.168.100.4 via 192.168.100.188
+
+print_message "VLAN 5, 6 Setup $counter" 0
+
+sudo sysctl net.ipv4.ip_forward=1
+print_message "Phase $counter" 1
+
+sudo iptables -P FORWARD DROP
+sudo iptables -F FORWARD
+sudo iptables -t nat -F
+
+sudo iptables -t nat -A POSTROUTING -s 192.168.100.0/24 -o enp0s3 -j MASQUERADE
+
+sudo iptables -A FORWARD -i enp0s3 -o veth6.77 -j ACCEPT
+sudo iptables -A FORWARD -i veth6.77 -o enp0s3 -j ACCEPT
+
+sudo iptables -A FORWARD -i enp0s3 -o veth6.88 -j ACCEPT
+sudo iptables -A FORWARD -i veth6.88 -o enp0s3 -j ACCEPT
+
+sudo iptables -A FORWARD -i enp0s3 -o veth6 -j ACCEPT
+sudo iptables -A FORWARD -i veth6 -o enp0s3 -j ACCEPT
+
+
+if [ true ] ; then
+    print_message "Conditional $counter" 0
+fi
+
+exit 1
 #sudo ip netns exec nsS1 ip link set dev veth5 up
+# sudo ip link set veth5 netns nsS1
+
 print_message "Phase $counter" 1
 
 sudo sysctl net.ipv4.ip_forward=1
